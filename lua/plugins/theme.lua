@@ -1,0 +1,1 @@
+/home/chapuchapumbusi/.config/omarchy/current/theme/neovim.lua
