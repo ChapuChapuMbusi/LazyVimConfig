@@ -255,25 +255,55 @@ local function type_declaration_line(path, type_name)
   return 1, 1, lines[1] or ""
 end
 
-local function jump_to_file(path, type_name)
-  local lnum, col = type_declaration_line(path, type_name)
-  vim.cmd("normal! m'")
-  vim.cmd.edit(vim.fn.fnameescape(path))
-  vim.api.nvim_win_set_cursor(0, { lnum, math.max(col - 1, 0) })
-  vim.cmd("normal! zv")
+local function set_cursor_safely(lnum, col)
+  lnum = tonumber(lnum) or 1
+  col = tonumber(col) or 0
+
+  local line_count = vim.api.nvim_buf_line_count(0)
+  lnum = math.max(1, math.min(lnum, line_count))
+
+  local line = vim.api.nvim_buf_get_lines(0, lnum - 1, lnum, false)[1] or ""
+  col = math.max(0, math.min(col, #line))
+
+  vim.api.nvim_win_set_cursor(0, { lnum, col })
 end
 
-local function fallback_jump(item)
+local function filename_from_location(item)
   local uri = item.user_data and (item.user_data.uri or item.user_data.targetUri)
   local filename = uri or item.filename
   if not filename or filename == "" then
     return
   end
 
+  filename = tostring(filename)
+  if filename:match("^file://") then
+    local ok, decoded = pcall(vim.uri_to_fname, filename)
+    if ok and decoded and decoded ~= "" then
+      return decoded
+    end
+  end
+
+  return filename
+end
+
+local function jump_to_file(path, type_name)
+  local lnum, col = type_declaration_line(path, type_name)
+  vim.cmd("normal! m'")
+  vim.cmd.edit(vim.fn.fnameescape(path))
+  set_cursor_safely(lnum, math.max(col - 1, 0))
+  vim.cmd("normal! zv")
+end
+
+local function fallback_jump(item)
+  local filename = filename_from_location(item)
+  if not filename then
+    return
+  end
+
   vim.cmd("normal! m'")
   vim.cmd.edit(vim.fn.fnameescape(filename))
   if item.lnum then
-    vim.api.nvim_win_set_cursor(0, { item.lnum, math.max((item.col or 1) - 1, 0) })
+    set_cursor_safely(item.lnum, math.max((item.col or 1) - 1, 0))
     vim.cmd("normal! zv")
   end
 end
